@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generador y Gestor de Minutas de Reunión</title>
+  <!-- Librería para exportar a PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f0f4f8; margin: 0; padding: 20px; color: #2d3748; }
+    .container { max-width: 800px; margin: auto; background: #ffffff; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h1 { color: #1a365d; margin-bottom: 5px; font-size: 24px; text-align: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 12px; }
+    h2 { color: #2b6cb0; margin-top: 25px; margin-bottom: 12px; font-size: 18px; border-left: 4px solid #3182ce; padding-left: 10px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+    .field { margin-bottom: 15px; }
+    label { font-weight: 600; display: block; margin-bottom: 6px; font-size: 0.9em; color: #4a5568; }
+    input, select, textarea { width: 100%; padding: 11px; border: 1px solid #cbd5e0; border-radius: 6px; font-size: 14px; background-color: #f8fafc; transition: border-color 0.2s; }
+    input:focus, select:focus, textarea:focus { border-color: #3182ce; outline: none; background-color: #fff; }
+    textarea { height: 90px; resize: vertical; }
+    
+    .btn-group { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 25px; }
+    button { color: white; border: none; padding: 12px 18px; border-radius: 6px; cursor: pointer; font-size: 15px; font-weight: bold; flex: 1; min-width: 160px; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background-color 0.2s; }
+    .btn-pdf { background-color: #2b6cb0; }
+    .btn-pdf:hover { background-color: #2c5282; }
+    .btn-repo { background-color: #2f855a; }
+    .btn-repo:hover { background-color: #276749; }
+    .btn-load { background-color: #d69e2e; }
+    .btn-load:hover { background-color: #b7791f; }
+    .btn-clear { background-color: #718096; }
+    .btn-clear:hover { background-color: #4a5568; }
+
+    .config-box { background: #ebf8ff; border: 1px solid #bee3f8; padding: 15px; border-radius: 8px; margin-bottom: 25px; font-size: 0.88em; }
+    .config-box summary { cursor: pointer; font-weight: bold; color: #2b6cb0; }
+    .file-input-wrapper { position: relative; overflow: hidden; display: inline-block; flex: 1; min-width: 160px; }
+    .file-input-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; }
+    
+    .status-badge { display: none; padding: 10px; margin-bottom: 15px; border-radius: 6px; font-weight: 500; font-size: 0.9em; text-align: center; }
+    .status-success { background-color: #c6f6d5; color: #22543d; border: 1px solid #9ae6b4; }
+    .status-info { background-color: #ebf8ff; color: #2c5282; border: 1px solid #bee3f8; }
+
+    /* Estilos del Pie de Página y Firma */
+    .footer-section { margin-top: 35px; border-top: 2px solid #e2e8f0; padding-top: 20px; text-align: right; }
+    .signature-container { display: inline-block; text-align: center; }
+    .signature-img { max-height: 70px; max-width: 200px; object-fit: contain; display: block; margin: 0 auto 5px auto; }
+    .signature-line { border-top: 1px solid #718096; width: 180px; margin: 5px auto; }
+    .creator-text { font-size: 0.85em; color: #718096; margin: 2px 0; }
+    .creator-id { font-weight: bold; color: #2d3748; font-size: 0.95em; }
+
+    .signature-upload-box { background: #f7fafc; border: 1px dashed #cbd5e0; padding: 15px; border-radius: 6px; margin-top: 15px; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- CONFIGURACIÓN DE GITHUB -->
+    <div class="config-box">
+      <details id="configDetails">
+        <summary>⚙️ Configuración de Conexión a GitHub (Opcional para guardar en la nube)</summary>
+        <p style="margin: 8px 0; color: #4a5568;">Ingresa tus credenciales si deseas respaldar las minutas directamente en tu repositorio de GitHub.</p>
+        <div class="grid">
+          <div class="field">
+            <label>Usuario de GitHub:</label>
+            <input type="text" id="ghUser" placeholder="ej. tu-usuario">
+          </div>
+          <div class="field">
+            <label>Nombre del Repositorio:</label>
+            <input type="text" id="ghRepo" placeholder="ej. minutas-web">
+          </div>
+        </div>
+        <div class="field">
+          <label>Personal Access Token (GitHub):</label>
+          <input type="password" id="ghToken" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx">
+        </div>
+      </details>
+    </div>
+
+    <!-- MENSAJE DE ESTADO -->
+    <div id="statusMessage" class="status-badge"></div>
+
+    <!-- CONTENIDO DE LA MINUTA (SE CONVIERTE A PDF) -->
+    <div id="minuta-content">
+      <h1>Minuta de Reunión</h1>
+      
+      <h2>1. Datos Generales</h2>
+      <div class="grid">
+        <div class="field">
+          <label>Fecha:</label>
+          <input type="date" id="fecha">
+        </div>
+        <div class="field">
+          <label>Hora:</label>
+          <input type="time" id="hora">
+        </div>
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label>Lugar:</label>
+          <input type="text" id="lugar" placeholder="Ej. Sala de Juntas / Oficinas">
+        </div>
+        <div class="field">
+          <label>Modalidad:</label>
+          <select id="modalidad">
+            <option value="Presencial">Presencial</option>
+            <option value="Virtual">Virtual</option>
+            <option value="Híbrida">Híbrida</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label>Anfitrión / Organizador:</label>
+          <input type="text" id="anfitrion" placeholder="Nombre de quien organiza">
+        </div>
+        <div class="field">
+          <label>Tema de la Reunión:</label>
+          <input type="text" id="tema" placeholder="Asunto principal">
+        </div>
+      </div>
+      <div class="field">
+        <label>Asistentes:</label>
+        <input type="text" id="asistentes" placeholder="Nombres separados por comas">
+      </div>
+
+      <h2>2. Desarrollo y Notas</h2>
+      <div class="field">
+        <label>Notas de la Reunión:</label>
+        <textarea id="notas" placeholder="Puntos clave discutidos..."></textarea>
+      </div>
+
+      <h2>3. Acuerdos y Compromisos</h2>
+      <div class="field">
+        <label>Líneas de Acción y Actividades:</label>
+        <textarea id="actividades" placeholder="Describa las actividades acordadas..."></textarea>
+      </div>
+      <div class="grid">
+        <div class="field">
+          <label>Encargados / Responsables:</label>
+          <input type="text" id="encargados" placeholder="Nombres de responsables">
+        </div>
+        <div class="field">
+          <label>Fecha de Entrega:</label>
+          <input type="date" id="fechaEntrega">
+        </div>
+      </div>
+
+      <!-- PIE DE PÁGINA Y FIRMA DE LA CREADORA -->
+      <div class="footer-section">
+        <div class="signature-container">
+          <img id="signaturePreview" class="signature-img" src="" alt="Firma / Rúbrica" style="display: none;">
+          <div class="signature-line"></div>
+          <p class="creator-text">Elaborado por:</p>
+          <p class="creator-id" id="creadoraIdDisplay">c.Godoy</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN PARA SUBIR RÚBRICA EN IMAGEN -->
+    <div class="signature-upload-box">
+      <label style="margin-bottom: 4px;">✍️ Firma / Rúbrica en imagen (Opcional):</label>
+      <input type="file" id="signatureFileInput" accept="image/*" onchange="cargarImagenFirma(event)" style="background: none; border: none; padding: 5px 0;">
+      <span class="creator-text" style="display:block;">Puedes subir una foto o imagen de tu rúbrica. Se guardará para tus próximas minutas.</span>
+    </div>
+
+    <!-- BOTONES DE ACCIÓN -->
+    <div class="btn-group">
+      <button class="btn-pdf" onclick="descargarPDF()">📄 Exportar a PDF</button>
+      <button class="btn-repo" onclick="guardarEnGitHub()">☁️ Guardar en GitHub</button>
+      
+      <!-- Cargar archivo JSON local -->
+      <div class="file-input-wrapper">
+        <button class="btn-load">📂 Cargar JSON</button>
+        <input type="file" id="jsonFileInput" accept=".json" onchange="cargarDesdeArchivoLocal(event)">
+      </div>
+
+      <button class="btn-clear" onclick="limpiarFormulario()">🔄 Limpiar</button>
+    </div>
+
+  </div>
+
+  <script>
+    // Cargar rúbrica guardada previamente al iniciar
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedSignature = localStorage.getItem('creadoraRubrica');
+      if (savedSignature) {
+        const preview = document.getElementById('signaturePreview');
+        preview.src = savedSignature;
+        preview.style.display = 'block';
+      }
+    });
+
+    // Subir y mostrar imagen de firma
+    function cargarImagenFirma(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const base64Img = e.target.result;
+        const preview = document.getElementById('signaturePreview');
+        preview.src = base64Img;
+        preview.style.display = 'block';
+        localStorage.setItem('creadoraRubrica', base64Img);
+        mostrarEstado('✍️ Rúbrica agregada y guardada correctamente.');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // Mostrar mensajes temporales
+    function mostrarEstado(mensaje, esError = false) {
+      const msgDiv = document.getElementById('statusMessage');
+      msgDiv.style.display = 'block';
+      msgDiv.className = 'status-badge ' + (esError ? 'status-info' : 'status-success');
+      msgDiv.innerText = mensaje;
+      setTimeout(() => { msgDiv.style.display = 'none'; }, 4000);
+    }
+
+    // Exportación a PDF
+    function descargarPDF() {
+      const elemento = document.getElementById('minuta-content');
+      const fechaVal = document.getElementById('fecha').value || 'Reunion';
+      const opciones = {
+        margin: 10,
+        filename: `Minuta_${fechaVal}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2 },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
+      html2pdf().set(opciones).from(elemento).save();
+      mostrarEstado('📄 PDF generado correctamente.');
+    }
+
+    // Obtener todos los datos del formulario como objeto JSON
+    function obtenerDatosFormulario() {
+      const imgPreview = document.getElementById('signaturePreview');
+      return {
+        fecha: document.getElementById('fecha').value,
+        hora: document.getElementById('hora').value,
+        lugar: document.getElementById('lugar').value,
+        modalidad: document.getElementById('modalidad').value,
+        anfitrion: document.getElementById('anfitrion').value,
+        tema: document.getElementById('tema').value,
+        asistentes: document.getElementById('asistentes').value,
+        notas: document.getElementById('notas').value,
+        actividades: document.getElementById('actividades').value,
+        encargados: document.getElementById('encargados').value,
+        fechaEntrega: document.getElementById('fechaEntrega').value,
+        creadora: 'cGodoy',
+        rubricaBase64: imgPreview.style.display !== 'none' ? imgPreview.src : '',
+        guardadoEl: new Date().toISOString()
+      };
+    }
+
+    // Rellenar formulario con datos JSON
+    function poblarFormulario(datos) {
+      document.getElementById('fecha').value = datos.fecha || '';
+      document.getElementById('hora').value = datos.hora || '';
+      document.getElementById('lugar').value = datos.lugar || '';
+      document.getElementById('modalidad').value = datos.modalidad || 'Presencial';
+      document.getElementById('anfitrion').value = datos.anfitrion || '';
+      document.getElementById('tema').value = datos.tema || '';
+      document.getElementById('asistentes').value = datos.asistentes || '';
+      document.getElementById('notas').value = datos.notas || '';
+      document.getElementById('actividades').value = datos.actividades || '';
+      document.getElementById('encargados').value = datos.encargados || '';
+      document.getElementById('fechaEntrega').value = datos.fechaEntrega || '';
+
+      const preview = document.getElementById('signaturePreview');
+      if (datos.rubricaBase64) {
+        preview.src = datos.rubricaBase64;
+        preview.style.display = 'block';
+      } else {
+        const savedSignature = localStorage.getItem('creadoraRubrica');
+        if (savedSignature) {
+          preview.src = savedSignature;
+          preview.style.display = 'block';
+        } else {
+          preview.style.display = 'none';
+        }
+      }
+
+      mostrarEstado('📂 Datos cargados en el formulario correctamente.');
+    }
+
+    // Cargar desde archivo local .json
+    function cargarDesdeArchivoLocal(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const datos = JSON.parse(e.target.result);
+          poblarFormulario(datos);
+        } catch (err) {
+          alert("El archivo seleccionado no tiene un formato JSON válido.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Limpiar campos del formulario
+    function limpiarFormulario() {
+      if (confirm("¿Deseas limpiar todos los campos del formulario?")) {
+        poblarFormulario({});
+        document.getElementById('jsonFileInput').value = '';
+      }
+    }
+
+    // Guardar o actualizar datos editables en GitHub en formato JSON
+    async function guardarEnGitHub() {
+      const user = document.getElementById('ghUser').value.trim();
+      const repo = document.getElementById('ghRepo').value.trim();
+      const token = document.getElementById('ghToken').value.trim();
+
+      if (!user || !repo || !token) {
+        alert("Por favor despliega la pestaña de Configuración e ingresa tu Usuario, Repositorio y Token de GitHub.");
+        return;
+      }
+
+      const datosMinuta = obtenerDatosFormulario();
+      const fileName = `minuta_${datosMinuta.fecha || Date.now()}.json`;
+      const path = `minutas/${fileName}`;
+      const url = `https://api.github.com/repos/${user}/${repo}/contents/${path}`;
+
+      let sha = null;
+      try {
+        const checkRes = await fetch(url, {
+          headers: { 'Authorization': `token ${token}` }
+        });
+        if (checkRes.ok) {
+          const checkData = await checkRes.json();
+          sha = checkData.sha;
+        }
+      } catch (e) {}
+
+      const contentBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(datosMinuta, null, 2))));
+
+      const bodyData = {
+        message: `Guardar/Actualizar minuta: ${fileName}`,
+        content: contentBase64
+      };
+      if (sha) bodyData.sha = sha;
+
+      try {
+        const response = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(bodyData)
+        });
+
+        if (response.ok) {
+          mostrarEstado("☁️ ¡Minuta guardada/actualizada con éxito en GitHub!");
+        } else {
+          const err = await response.json();
+          alert(`Error al guardar en GitHub: ${err.message}`);
+        }
+      } catch (error) {
+        alert(`Error de red: ${error.message}`);
+      }
+    }
+  </script>
+
+</body>
+</html>
